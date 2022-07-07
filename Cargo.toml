@@ -17,6 +17,7 @@ anyhow = "1"
 native-tls = "0.2"
 
 [features]
+# default = ["wss", "secure-amqp"]
 wss = []
 secure-amqp = []
 

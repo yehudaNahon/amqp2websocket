@@ -1,6 +1,8 @@
 use std::{
+    fs::File,
     io::{Read, Write},
     net::TcpListener,
+    path::PathBuf,
     thread::spawn,
 };
 
@@ -8,6 +10,7 @@ use amiquip::{Exchange, Publish};
 use amqp2websocket::{accept, connect_to_rabbit};
 use anyhow::{bail, Context, Result};
 use log::{debug, error, info};
+use native_tls::Identity;
 use structopt::StructOpt;
 use tungstenite::{
     accept_hdr,
@@ -49,23 +52,35 @@ fn handle_client<S: Read + Write>(stream: S, rabbit_address: &str, queue_name: &
             .read_message()
             .context("Failed reading message from websocket")?;
 
-        if msg.is_binary() || msg.is_text() {
-            debug!("received: new message");
+        match msg {
+            Message::Text(_) | Message::Binary(_) => {
+                debug!("received: new message");
 
-            let data = msg.into_data();
+                let data = msg.into_data();
 
-            // Publish a message to queue.
-            exchange
-                .publish(Publish::new(&data, queue_name))
-                .context("Failed publishing to queue")?;
-        } else if msg.is_close() {
-            info!("master is closing the connection");
-            return Ok(());
+                // Publish a message to queue.
+                exchange
+                    .publish(Publish::new(&data, queue_name))
+                    .context("Failed publishing to queue")?;
+            }
+            Message::Ping(_) => {
+                debug!("Received ping");
+                websocket
+                    .write_message(Message::Pong(Vec::new()))
+                    .context("Failed sending pong message")?;
+            }
+            Message::Pong(_) => {
+                debug!("Received pong");
+            }
+            Message::Close(_) => {
+                info!("master is closing the connection");
+                return Ok(());
+            }
         }
     }
 }
 
-fn run_slave(port: u32, rabbit: &str, queue_name: &str) -> Result<()> {
+fn run_slave(identity: Identity, port: u32, rabbit: &str, queue_name: &str) -> Result<()> {
     let listener = TcpListener::bind(format!("0.0.0.0:{}", &port))
         .context("Failed to open TCP connection for listening")?;
 
@@ -74,7 +89,7 @@ fn run_slave(port: u32, rabbit: &str, queue_name: &str) -> Result<()> {
         let queue_name = queue_name.to_string();
         let stream = stream.context("Failed opening TCP connection")?;
 
-        let stream = match accept(stream) {
+        let stream = match accept(stream, identity.clone()) {
             Ok(s) => s,
             Err(e) => {
                 error!("failed accepting tls connection bcause of error: {}", e);
@@ -95,6 +110,12 @@ fn run_slave(port: u32, rabbit: &str, queue_name: &str) -> Result<()> {
 
 #[derive(StructOpt, Debug)]
 struct Arguments {
+    /// the path to the pfx file to load
+    pfx_file: String,
+
+    /// the password too the pfx file
+    password: String,
+
     /// the address of the rabbit server (for example: amqp://guest:guest@localhost:5672)
     rabbit: String,
 
@@ -113,7 +134,13 @@ fn main() {
 
     let args = Arguments::from_args();
 
-    match run_slave(args.port, &args.rabbit, &args.queue_name) {
+    // open pfx file to load tls from
+    let mut file = File::open(args.pfx_file).unwrap();
+    let mut identity = vec![];
+    file.read_to_end(&mut identity).unwrap();
+    let identity = Identity::from_pkcs12(&identity, &args.password).unwrap();
+
+    match run_slave(identity, args.port, &args.rabbit, &args.queue_name) {
         Ok(_) => info!("Closing master"),
         Err(e) => error!("Master exited because of error: {}", e),
     }
