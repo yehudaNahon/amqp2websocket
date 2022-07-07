@@ -1,0 +1,23 @@
+[package]
+name = "amqp2websocket"
+version = "0.1.0"
+authors = ["Yehuda Nahon <yehudanahon98@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+simple_logger = "1.6"
+log = "0.4"
+structopt = "0.3"
+tungstenite = {version = "0.13", features = ["native-tls"]}
+url = "2.2"
+amiquip = "0.3"
+anyhow = "1"
+native-tls = "0.2"
+
+[features]
+wss = []
+secure-amqp = []
+
+
