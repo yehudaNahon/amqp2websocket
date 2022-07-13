@@ -1,8 +1,10 @@
 use amiquip::Connection;
 use anyhow::Result;
 
-use native_tls::{Identity, TlsAcceptor, TlsStream};
+#[cfg(feature = "wss")]
+use native_tls::{TlsAcceptor, TlsStream};
 
+use native_tls::Identity;
 use std::net::TcpStream;
 
 #[cfg(feature = "amqp-secure")]

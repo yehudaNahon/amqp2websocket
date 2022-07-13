@@ -81,8 +81,6 @@ fn queue_pusher(rabbit_address: &str, queue: &str, secure: bool) -> Result<()> {
         let time = time::Duration::from_secs(1);
         sleep(time);
     }
-
-    Ok(())
 }
 
 #[derive(StructOpt, Debug)]

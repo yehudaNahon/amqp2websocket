@@ -2,7 +2,6 @@ use std::{
     fs::File,
     io::{Read, Write},
     net::TcpListener,
-    path::PathBuf,
     thread::spawn,
 };
 
